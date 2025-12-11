@@ -23,7 +23,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include "WebcamScreenshot.h"
+#include "httplib.h"
 
 #ifdef _WIN32
 #pragma comment(lib, "gdiplus.lib")

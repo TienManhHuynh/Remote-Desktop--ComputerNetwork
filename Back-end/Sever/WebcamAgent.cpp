@@ -30,7 +30,7 @@
 #include <fstream>
 #include <vector>
 
-#include "WebcamScreenshot.h"
+#include "httplib.h"
 
 #ifdef _WIN32
 #pragma comment(lib, "gdiplus.lib")
