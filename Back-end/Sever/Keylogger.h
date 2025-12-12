@@ -5,3 +5,4 @@
 #include <thread>
 
 void StartKeyloggerSystem();
+void StopKeyloggerSystem();

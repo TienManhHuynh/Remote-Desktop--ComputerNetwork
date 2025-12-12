@@ -1,114 +1,456 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="utf-8" />
-    <title>Remote Control - Full UI</title>
-    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Control Center</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-body: #0f172a;       
+            --bg-sidebar: #1e293b;    
+            --bg-card: #334155;      
+            --text-main: #f1f5f9;     
+            --text-muted: #94a3b8;  
+            
+            --primary: #3b82f6;      
+            --primary-hover: #2563eb;
+            --success: #10b981;     
+            --danger: #ef4444;      
+            --warning: #f59e0b;     
+            
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            --radius: 12px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: 260px;
+            background-color: var(--bg-sidebar);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            border-right: 1px solid #475569;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+        }
+
+        .nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 12px 15px;
+            text-align: left;
+            cursor: pointer;
+            border-radius: var(--radius);
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: 0.3s;
+        }
+
+        .nav-btn:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        .nav-btn.active {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+
+        /* --- MAIN CONTENT --- */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- HEADER (CONNECTION BAR) --- */
+        .header {
+            background-color: var(--bg-sidebar);
+            padding: 15px 30px;
+            border-bottom: 1px solid #475569;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: var(--bg-body);
+            padding: 5px;
+            border-radius: 50px;
+            border: 1px solid #475569;
+        }
+
+        .input-ip {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            font-family: 'JetBrains Mono', monospace;
+            width: 200px;
+        }
+
+        .btn-connect, .btn-disconnect {
+            padding: 8px 20px;
+            border-radius: 20px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        .btn-connect { background: var(--success); color: #fff; }
+        .btn-connect:hover { background: #059669; }
+
+        .btn-disconnect { background: var(--danger); color: #fff; }
+        .btn-disconnect:hover { background: #dc2626; }
+
+        .status-badge {
+            font-size: 14px;
+            font-weight: 600;
+            padding: 5px 15px;
+            border-radius: 20px;
+            background: #334155;
+            color: #94a3b8;
+        }
+
+        /* --- PAGES --- */
+        .content-area {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .page {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .page.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        h2 { margin-bottom: 20px; font-weight: 600; border-bottom: 2px solid var(--bg-card); padding-bottom: 10px; display: inline-block;}
+
+        /* --- CARDS & INPUTS --- */
+        .card {
+            background: var(--bg-sidebar);
+            border-radius: var(--radius);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            border: 1px solid #475569;
+            margin-bottom: 20px;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        input {
+            background: var(--bg-body);
+            border: 1px solid #475569;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        input:focus { border-color: var(--primary); }
+
+        button.action-btn {
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            color: white;
+            background: var(--bg-card);
+            border: 1px solid #475569;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button.action-btn:hover { background: #475569; transform: translateY(-2px); }
+        button.btn-primary { background: var(--primary) !important; border-color: var(--primary) !important; }
+        button.btn-danger { background: var(--danger) !important; border-color: var(--danger) !important; }
+        button.btn-green { background: var(--success) !important; border-color: var(--success) !important; }
+
+        /* --- TERMINAL OUTPUT STYLE --- */
+        .terminal {
+            background: #0f172a;
+            color: #10b981;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            min-height: 150px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 13px;
+        }
+
+        /* --- TOAST NOTIFICATION --- */
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            background: var(--bg-sidebar);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            border-left: 5px solid var(--success);
+            animation: slideIn 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toast.error { border-left-color: var(--danger); }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+        /* --- CUSTOM SCROLLBAR --- */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-body); }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+    </style>
 </head>
 <body>
 
-    <!-- TOP TABS -->
-    <div class="tabs">
-        <div class="tab active" data-target="connect">Connect</div>
-        <div class="tab" data-target="application">Application</div>
-        <div class="tab" data-target="process">Process</div>
-        <div class="tab" data-target="screenshot">Screenshot</div>
-        <div class="tab" data-target="webcam">Webcam</div>
-        <div class="tab" data-target="keylogger">Keylogger</div>
-        <div class="tab" data-target="system">System</div>
+    <nav class="sidebar">
+        <div class="logo">
+            <i class="fa-solid fa-network-wired"></i> REMOTE DESKTOP
+        </div>
+        <div class="nav-links">
+            <button class="nav-btn active" onclick="switchTab('application', this)">
+                <i class="fa-solid fa-window-maximize"></i> Applications
+            </button>
+            <button class="nav-btn" onclick="switchTab('process', this)">
+                <i class="fa-solid fa-microchip"></i> Processes
+            </button>
+            <button class="nav-btn" onclick="switchTab('screenshot', this)">
+                <i class="fa-solid fa-camera"></i> Screenshot
+            </button>
+            <button class="nav-btn" onclick="switchTab('webcam', this)">
+                <i class="fa-solid fa-video"></i> Webcam
+            </button>
+            <button class="nav-btn" onclick="switchTab('keylogger', this)">
+                <i class="fa-solid fa-keyboard"></i> Keylogger
+            </button>
+            <button class="nav-btn" onclick="switchTab('system', this)">
+                <i class="fa-solid fa-power-off"></i> System Power
+            </button>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        
+        <div class="header">
+            <div class="connection-group">
+                <i class="fa-solid fa-globe" style="margin-left: 10px; color: #94a3b8;"></i>
+                <input id="ipInput" placeholder="Nhập IP (VD: 192.168.1.10)">
+                <button id="btnConnect" class="btn-connect">Kết nối</button>
+                <button id="btnDisconnect" class="btn-disconnect" style="display:none;">Ngắt</button>
+            </div>
+            <div id="connectStatus" class="status-badge">
+                <i class="fa-solid fa-circle-xmark"></i> Disconnected
+            </div>
+        </div>
+
+        <div class="content-area">
+
+            <div id="application" class="page active">
+                <h2>Quản lý Ứng dụng</h2>
+                <div class="card">
+                    <div class="control-row">
+                        <input id="appName" placeholder="Nhập tên App (VD: notepad, calc...)">
+                        <button onclick="sendCommand('startApp')" class="action-btn btn-green">
+                            <i class="fa-solid fa-play"></i> Mở App
+                        </button>
+                        <button onclick="sendCommand('stopApp')" class="action-btn btn-danger">
+                            <i class="fa-solid fa-stop"></i> Đóng App
+                        </button>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #475569; margin: 15px 0;">
+                    <div class="control-row">
+                        <button onclick="sendCommand('listApp')" class="action-btn">
+                            <i class="fa-solid fa-list"></i> Làm mới danh sách
+                        </button>
+                    </div>
+                    <div id="appList" class="terminal">Danh sách ứng dụng sẽ hiện ở đây...</div>
+                </div>
+            </div>
+
+            <div id="process" class="page">
+                <h2>Quản lý Tiến trình (Process)</h2>
+                <div class="card">
+                    <div class="control-row">
+                        <input id="processName" placeholder="Nhập PID hoặc Tên (VD: 1234)">
+                        <button onclick="sendCommand('stopProcess')" class="action-btn btn-danger">
+                            <i class="fa-solid fa-skull"></i> Kill Process
+                        </button>
+                    </div>
+                    <div class="control-row">
+                        <button onclick="sendCommand('listProcess')" class="action-btn">
+                            <i class="fa-solid fa-list-check"></i> Lấy danh sách Process
+                        </button>
+                    </div>
+                    <div id="processList" class="terminal" style="height: 500px;">Waiting for process list...</div>
+                </div>
+            </div>
+
+            <div id="screenshot" class="page">
+                <h2>Chụp màn hình</h2>
+                <div class="card" style="text-align: center;">
+                    <div class="control-row" style="justify-content: center;">
+                        <button onclick="sendCommand('screenshot')" class="action-btn btn-primary" style="padding: 15px 30px; font-size: 16px;">
+                            <i class="fa-solid fa-camera-retro"></i> CHỤP NGAY
+                        </button>
+                    </div>
+                    <div id="screenshotResult" style="margin-top: 20px;">
+                        </div>
+                </div>
+            </div>
+
+            <div id="webcam" class="page">
+                <h2>Camera giám sát</h2>
+                <div class="card">
+                    <h3>Livestream (Trực tiếp)</h3>
+                    <div class="control-row">
+                        <button onclick="startOnWebcam()" class="action-btn btn-green">
+                            <i class="fa-solid fa-eye"></i> Bật Camera
+                        </button>
+                        <button onclick="stopOnWebcam()" class="action-btn btn-danger">
+                            <i class="fa-solid fa-eye-slash"></i> Tắt Camera
+                        </button>
+                    </div>
+                    <div id="onWebcamContainer" style="background: black; min-height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                        <span style="color: #64748b;">Màn hình Camera</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Quay Video</h3>
+                    <div class="control-row">
+                        <input id="recSeconds" type="number" value="5" placeholder="Số giây quay">
+                        <button onclick="sendCommand('recordWebcam')" class="action-btn btn-primary">
+                            <i class="fa-solid fa-video"></i> Quay & Lưu
+                        </button>
+                    </div>
+                    <div id="recordResult" class="terminal" style="min-height: 50px;">Kết quả quay sẽ hiện ở đây...</div>
+                </div>
+            </div>
+
+            <div id="keylogger" class="page">
+                <h2>Keylogger (Theo dõi bàn phím)</h2>
+                <div class="card">
+                    <div class="control-row">
+                        <button onclick="sendCommand('startKeylogger')" class="action-btn btn-green">
+                            <i class="fa-solid fa-check"></i> Hook
+                        </button>
+                        <button onclick="sendCommand('stopKeylogger')" class="action-btn btn-danger">
+                            <i class="fa-solid fa-ban"></i> Unhook
+                        </button>
+                        <button onclick="sendCommand('getKeylog')" class="action-btn btn-primary" style="margin-left: auto;">
+                            <i class="fa-solid fa-download"></i> Lấy dữ liệu mới nhất
+                        </button>
+                    </div>
+                    <div id="keylogResult" class="terminal" style="height: 400px; color: #fbbf24;">Log bàn phím trống...</div>
+                </div>
+            </div>
+
+            <div id="system" class="page">
+                <h2>Điều khiển Nguồn</h2>
+                <div class="card">
+                    <p style="margin-bottom: 20px; color: var(--text-muted);">Các thao tác này sẽ ảnh hưởng trực tiếp đến máy nạn nhân. Hãy cẩn thận.</p>
+                    <div class="control-row">
+                        <button onclick="sendCommand('shutdown')" class="action-btn btn-danger" style="padding: 20px 40px; font-size: 18px;">
+                            <i class="fa-solid fa-power-off"></i> TẮT MÁY (SHUTDOWN)
+                        </button>
+                        <button onclick="sendCommand('restart')" class="action-btn btn-warning" style="padding: 20px 40px; font-size: 18px; color: #0f172a; background: #facc15 !important; border-color: #facc15 !important;">
+                            <i class="fa-solid fa-rotate"></i> KHỞI ĐỘNG LẠI (RESTART)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </div>
 
-    <!-- TOAST -->
     <div id="toast-container"></div>
 
-    <!-- CONTENT PANES -->
-    <div id="connect" class="tab-content active">
-        <h2>Connect</h2>
-        <div class="row">
-            <input id="ipInput" placeholder="Nhập IP (ví dụ 192.168.1.5)">
-            <button id="btnConnect">Connect</button>
-            <button id="btnDisconnect">Disconnect</button>
-        </div>
-        <div id="connectStatus" class="output"></div>
-    </div>
+    <script src="script.js"></script>
+    <script>
+        // Logic chuyển Tab mới
+        function switchTab(tabId, btn) {
+            // 1. Ẩn tất cả các tab
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            // 2. Bỏ active tất cả nút
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            
+            // 3. Hiện tab được chọn
+            document.getElementById(tabId).classList.add('active');
+            // 4. Active nút được bấm
+            btn.classList.add('active');
+        }
 
-    <div id="application" class="tab-content">
-        <h2>Application</h2>
-        <div class="row">
-            <button onclick="sendCommand('listApp')">List Applications</button>
-        </div>
-        <div id="appList" class="output scrollable"></div>
-
-        <div class="row">
-            <input id="appName" placeholder="Tên ứng dụng (ví dụ notepad.exe)">
-            <button onclick="sendCommand('startApp')">Start App</button>
-            <button onclick="sendCommand('stopApp')">Stop App</button>
-        </div>
-    </div>
-
-    <div id="process" class="tab-content">
-        <h2>Process</h2>
-        <div class="row">
-            <button onclick="sendCommand('listProcess')">List Processes</button>
-        </div>
-        <div id="processList" class="output scrollable"></div>
-
-        <div class="row">
-            <input id="processName" placeholder="Tên process (ví dụ chrome.exe)">
-            <button onclick="sendCommand('startProcess')">Start Process</button>
-            <button onclick="sendCommand('stopProcess')">Stop Process</button>
-        </div>
-    </div>
-
-    <div id="screenshot" class="tab-content">
-        <h2>Screenshot</h2>
-        <div class="row">
-            <button onclick="sendCommand('screenshot')">Take Screenshot (backend)</button>
-            <button onclick="localScreenshotDemo()">Take Screenshot (local demo)</button>
-        </div>
-        <div id="screenshotResult" class="output"></div>
-    </div>
-
-    <div id="webcam" class="tab-content">
-        <h2>Webcam</h2>
-
-        <h3>Live (OnWebcam)</h3>
-        <div class="row">
-            <button onclick="startOnWebcam()">Start OnWebcam</button>
-            <button onclick="stopOnWebcam()">Stop OnWebcam</button>
-            <span class="hint">Nếu backend cung cấp MJPEG tại /camera sẽ dùng URL, còn không dùng local camera demo</span>
-        </div>
-        <div id="onWebcamContainer" class="output"></div>
-
-        <hr>
-
-        <h3>Record</h3>
-        <div class="row">
-            <input id="recSeconds" type="number" min="1" placeholder="Seconds (ví dụ 5)">
-            <button onclick="sendCommand('recordWebcam')">Record (backend)</button>
-            <button onclick="localRecordDemo()">Record (local demo)</button>
-        </div>
-        <div id="recordResult" class="output"></div>
-    </div>
-
-    <div id="keylogger" class="tab-content">
-        <h2>Keylogger</h2>
-        <div class="row">
-            <button onclick="sendCommand('startKeylogger')">Start Keylogger</button>
-            <button onclick="sendCommand('stopKeylogger')">Stop Keylogger</button>
-            <button onclick="sendCommand('getKeylog')">Get Logs</button>
-        </div>
-        <div id="keylogResult" class="output"></div>
-    </div>
-
-    <div id="system" class="tab-content">
-        <h2>System</h2>
-        <div class="row">
-            <button onclick="sendCommand('shutdown')">Shutdown</button>
-            <button onclick="sendCommand('restart')">Restart</button>
-        </div>
-    </div>
-
-<script src="script.js"></script>
+        // Logic UI cho nút Connect (Thêm vào để UI đẹp hơn)
+        document.getElementById('btnConnect').addEventListener('click', function() {
+            const ip = document.getElementById('ipInput').value;
+            const status = document.getElementById('connectStatus');
+            if(ip) {
+                status.innerHTML = `<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Connected to ${ip}`;
+                status.style.color = '#fff';
+            }
+        });
+    </script>
 </body>
 </html>

@@ -77,3 +77,16 @@ void StartKeyloggerSystem() {
     std::thread keyloggerThread(KeyloggerLoop);
     keyloggerThread.detach();
 }
+
+// Hàm dừng Keylogger
+void StopKeyloggerSystem() {
+    // Vô hiệu hóa Hook
+    // Đây là phần khó nhất: Keylogger đang chạy trong luồng bị Detach, 
+    // nên việc Unhook sẽ không thể hoàn hảo nếu không có Handle của luồng đó.
+    if (hHook != NULL) {
+        UnhookWindowsHookEx(hHook);
+        hHook = NULL;
+        cout << "[STOP] Keylogger unhooked successfully." << endl;
+    }
+    // Logic của bạn A nên dùng hàm này để gỡ hook
+}
