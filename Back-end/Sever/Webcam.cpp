@@ -7,21 +7,37 @@
 #include <filesystem>
 #include <iomanip>
 #include <sstream>
+using namespace std;
 
 // --- THƯ VIỆN OPENCV ---
 // Yêu cầu: Đã cài gói NuGet "uny.OpenCV" hoặc tương đương
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <atomic>
+#include <opencv2/opencv.hpp>
+
+// Trạng thái webcam
+static std::atomic<bool> g_webcamRunning(false);
+
+// Trạng thái record
+static std::atomic<bool> g_isRecording(false);
+static cv::VideoWriter g_writer;
+static std::chrono::steady_clock::time_point g_recordEndTime;
 
 // Link thư viện Winsock (để dùng hàm send)
 #pragma comment(lib, "ws2_32.lib")
 
-using namespace std;
 namespace fs = std::filesystem;
+static std::atomic<bool> g_isRecording(false);
+static std::atomic<int> g_recordSeconds(0);
+static cv::VideoWriter g_writer;
+static std::chrono::steady_clock::time_point g_recordEndTime;
+static std::string g_lastRecordedFile = "";
 
 // --- HÀM PHỤ TRỢ: LẤY THỜI GIAN HIỆN TẠI (ĐỂ ĐẶT TÊN FILE) ---
-string GetCurrentTimeStr() {
+string GetCurrentTimeStr()
+{
     auto now = chrono::system_clock::now();
     auto t = chrono::system_clock::to_time_t(now);
     tm tmv{};
@@ -31,107 +47,156 @@ string GetCurrentTimeStr() {
     ss << put_time(&tmv, "%Y%m%d_%H%M%S");
     return ss.str();
 }
+// 1. Hàm recordWebcam
+void StartRecord(int seconds)
+{
+    if (seconds <= 0)
+        seconds = 5;
+    if (g_isRecording)
+        return;
 
-// =============================================================
-// 1. CHỨC NĂNG QUAY VIDEO (RECORD)
-// =============================================================
-string RecordWebcam(int seconds) {
-    if (seconds <= 0) seconds = 5;
+    if (!std::filesystem::exists("captures"))
+        std::filesystem::create_directory("captures");
 
-    // 1. Tạo thư mục lưu trữ nếu chưa có
-    string dirName = "captures";
-    if (!fs::exists(dirName)) {
-        fs::create_directory(dirName);
-    }
+    g_lastRecordedFile =
+        "captures/video_" + GetCurrentTimeStr() + ".mp4";
 
-    // 2. Tạo tên file duy nhất (VD: captures/video_20231025_120000.mp4)
-    string filename = dirName + "/video_" + GetCurrentTimeStr() + ".mp4";
-
-    // 3. Mở Camera (Index 0 = Webcam mặc định)
-    // Thêm cv::CAP_DSHOW để khởi động camera nhanh hơn trên Windows
-    cv::VideoCapture cap(0, cv::CAP_DSHOW);
-    if (!cap.isOpened()) {
-        return "Loi: Khong tim thay hoac khong the mo Camera.";
-    }
-
-    // 4. Cấu hình thông số video
-    int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
-    int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+    int fourcc = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
     double fps = 20.0;
 
-    // Chọn Codec: 'mp4v' thường tương thích tốt, hoặc 'MJPG'
-    int fourcc = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
+    g_writer.open(g_lastRecordedFile, fourcc, fps, cv::Size(640, 480));
+    if (!g_writer.isOpened())
+        return;
 
-    cv::VideoWriter writer(filename, fourcc, fps, cv::Size(width, height));
-    if (!writer.isOpened()) {
-        return "Loi: Khong the khoi tao bo ghi Video (Kiem tra Codec).";
-    }
+    g_recordEndTime =
+        std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
 
-    // 5. Vòng lặp quay video
-    auto endTime = chrono::steady_clock::now() + chrono::seconds(seconds);
-    cv::Mat frame;
-
-    while (chrono::steady_clock::now() < endTime) {
-        if (!cap.read(frame)) break; // Đọc khung hình lỗi thì dừng
-
-        writer.write(frame); // Ghi vào file
-
-        // Sleep nhẹ để khớp với FPS (1000ms / 20fps = 50ms)
-        this_thread::sleep_for(chrono::milliseconds(50));
-    }
-
-    // 6. Giải phóng tài nguyên
-    cap.release();
-    writer.release();
-
-    // Trả về tên file để Server gửi link cho Client tải về
-    return filename;
+    g_isRecording = true;
 }
+#include <fstream>
+
+void SendVideoFile(SOCKET clientSocket, const std::string& filename) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        std::string err =
+            "HTTP/1.1 404 Not Found\r\n\r\nFile not found";
+        send(clientSocket, err.c_str(), err.size(), 0);
+        return;
+    }
+
+    file.seekg(0, std::ios::end);
+    size_t fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::string header =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: video/mp4\r\n"
+        "Content-Length: " + std::to_string(fileSize) + "\r\n"
+        "Content-Disposition: attachment; filename=\"video.mp4\"\r\n"
+        "Access-Control-Allow-Origin: *\r\n\r\n";
+
+    send(clientSocket, header.c_str(), header.size(), 0);
+
+    char buffer[8192];
+    while (!file.eof()) {
+        file.read(buffer, sizeof(buffer));
+        send(clientSocket, buffer, file.gcount(), 0);
+    }
+
+    file.close();
+}
+void SendLastRecordName(SOCKET clientSocket) {
+    std::string body =
+        "{ \"file\": \"" + g_lastRecordedFile + "\" }";
+
+    std::string header =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: " + std::to_string(body.size()) + "\r\n"
+        "Access-Control-Allow-Origin: *\r\n\r\n";
+
+    send(clientSocket, header.c_str(), header.size(), 0);
+    send(clientSocket, body.c_str(), body.size(), 0);
+}
+
 
 // =============================================================
 // 2. CHỨC NĂNG LIVESTREAM (MJPEG STREAMING)
 // =============================================================
-void StreamWebcam(SOCKET clientSocket) {
+void StreamWebcam(SOCKET clientSocket)
+{
     cv::VideoCapture cap(0, cv::CAP_DSHOW);
-    if (!cap.isOpened()) return;
+    if (!cap.isOpened())
+        return;
 
-    // 1. Gửi Header HTTP đặc biệt cho luồng MJPEG
-    // Báo cho trình duyệt biết đây là luồng ảnh liên tục (multipart/x-mixed-replace)
-    string header = "HTTP/1.1 200 OK\r\n"
+    g_webcamRunning = true;
+
+    std::string header =
+        "HTTP/1.1 200 OK\r\n"
         "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "\r\n";
-    send(clientSocket, header.c_str(), (int)header.length(), 0);
+        "Access-Control-Allow-Origin: *\r\n\r\n";
+
+    send(clientSocket, header.c_str(), header.size(), 0);
 
     cv::Mat frame;
-    vector<uchar> buf; // Bộ nhớ đệm chứa ảnh JPG nén
-    vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 50 }; // Nén chất lượng 50% cho mượt
+    std::vector<uchar> buf;
+    std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 50};
 
-    // 2. Vòng lặp vô tận (cho đến khi Client ngắt kết nối)
-    while (true) {
-        if (!cap.read(frame)) break;
+    while (g_webcamRunning)
+    {
+        if (!cap.read(frame))
+            break;
 
-        // Nén khung hình hiện tại thành định dạng .JPG
-        if (!cv::imencode(".jpg", frame, buf, params)) break;
+        // ===== RECORD MP4 =====
+        if (g_isRecording)
+        {
+            cv::Mat resized;
+            cv::resize(frame, resized, cv::Size(640, 480));
+            g_writer.write(resized);
 
-        // Tạo Header cho từng khung hình (Frame Header)
-        string boundary = "--frame\r\n"
+            if (std::chrono::steady_clock::now() >= g_recordEndTime)
+            {
+                g_isRecording = false;
+                g_writer.release();
+                std::cout << "Record xong\n";
+            }
+        }
+
+        // ===== STREAM MJPEG =====
+        if (!cv::imencode(".jpg", frame, buf, params))
+            break;
+
+        std::string boundary =
+            "--frame\r\n"
             "Content-Type: image/jpeg\r\n"
-            "Content-Length: " + to_string(buf.size()) + "\r\n"
-            "\r\n";
+            "Content-Length: " +
+            std::to_string(buf.size()) + "\r\n\r\n";
 
-        // Gửi Boundary
-        if (send(clientSocket, boundary.c_str(), (int)boundary.length(), 0) == SOCKET_ERROR) break;
+        if (send(clientSocket, boundary.c_str(), boundary.size(), 0) <= 0)
+            break;
+        if (send(clientSocket, (char *)buf.data(), buf.size(), 0) <= 0)
+            break;
+        if (send(clientSocket, "\r\n", 2, 0) <= 0)
+            break;
 
-        // Gửi Dữ liệu ảnh
-        if (send(clientSocket, (char*)buf.data(), (int)buf.size(), 0) == SOCKET_ERROR) break;
-
-        // Gửi dòng ngắt kết thúc frame
-        if (send(clientSocket, "\r\n", 2, 0) == SOCKET_ERROR) break;
-
-        // Giới hạn tốc độ gửi (~20 FPS) để không làm nghẽn mạng
-        this_thread::sleep_for(chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
+    // ===== CLEAN UP =====
     cap.release();
+
+    if (std::chrono::steady_clock::now() >= g_recordEndTime)
+    {
+        g_isRecording = false;
+        g_writer.release();
+
+        std::cout << "Record xong: " << g_lastRecordedFile << std::endl;
+    }
+
+    std::cout << "Webcam da tat\n";
+}
+void StopWebcam()
+{
+    g_webcamRunning = false;
+    std::cout << "Yeu cau tat webcam\n";
 }

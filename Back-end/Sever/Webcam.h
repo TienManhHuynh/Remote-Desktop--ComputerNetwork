@@ -1,9 +1,10 @@
 ﻿#pragma once
 #include <winsock2.h>
 #include <string>
-
-// Hàm quay video trong n giây, lưu file và trả về tên file
-std::string RecordWebcam(int seconds);
-
+#include <atomic>
+//Stop Webcam
+void stopWecam();
+// Bật record trong n giây
+void StartRecord(int seconds);
 // Hàm Livestream trực tiếp (MJPEG over HTTP)
 void StreamWebcam(SOCKET clientSocket);
