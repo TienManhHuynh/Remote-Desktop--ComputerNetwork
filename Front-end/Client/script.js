@@ -56,25 +56,51 @@ document.getElementById('btnDisconnect').addEventListener('click', ()=>{
 window.sendCommand = async function(cmd){
     if(!IP) { showToast("Chưa kết nối!", "error"); return; }
     
-    if(cmd === 'recordWebcam') {
+    if(cmd === 'recordVideo') {
         const sec = document.getElementById('recSeconds').value;
-        showToast(`🎥 Đang quay ${sec}s...`, "warning");
-        const path = await postControl({command:'recordWebcam', seconds: sec});
+        showToast(`🎥 Đang quay ${sec}s (Module riêng)...`, "warning");
         
-        if(path.includes("Loi")) showToast(path, "error");
-        else {
-            const fullUrl = `http://${IP}:8080${path}?t=${new Date().getTime()}`;
+        // 1. Gửi lệnh
+        const path = await postControl({command:'recordVideo', seconds: sec});
+        
+        if(path.includes("Loi") || path.includes("Error")) {
+            showToast(path, "error");
+            document.getElementById('recordResult').innerHTML = `<div style="color:red">${path}</div>`;
+        } else {
+            // 2. Tạo URL (Thêm timestamp để không cache video cũ)
+            const timestamp = new Date().getTime();
+            const fullUrl = `http://${IP}:8080${path}?t=${timestamp}`;
+            
+            // 3. Tạo tên file khi tải về
+            const downloadName = `Evidence_Video_${timestamp}.mp4`;
+
+            // 4. HIỆN VIDEO PLAYER & NÚT SAVE AS
             document.getElementById('recordResult').innerHTML = `
-                <div style="background:#1e293b; padding:10px; border-radius:8px; margin-top:10px;">
-                    <div style="color:#4ade80; margin-bottom:5px;">✅ Quay xong!</div>
-                    <video controls autoplay width="100%" src="${fullUrl}"></video>
-                    <a href="${fullUrl}" download="video.mp4"><button class="action-btn">Tải Video</button></a>
+                <div style="background:#1e293b; padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #475569;">
+                    <div style="color:#4ade80; margin-bottom:10px; font-weight:bold;">
+                        ✅ Quay xong! (Định dạng MP4)
+                    </div>
+                    
+                    <video controls autoplay width="100%" style="border-radius:5px; border:1px solid #334155; max-height: 300px;">
+                        <source src="${fullUrl}" type="video/mp4">
+                        Trình duyệt không hỗ trợ thẻ video.
+                    </video>
+
+                    <div style="margin-top: 15px; text-align: center;">
+                        <a href="${fullUrl}" download="${downloadName}">
+                            <button class="action-btn" style="background:#2563eb; width: 100%; padding: 10px;">
+                                <i class="fa-solid fa-floppy-disk"></i> LƯU VIDEO VỀ MÁY
+                            </button>
+                        </a>
+                        <div style="font-size: 0.8em; color: #94a3b8; margin-top: 5px;">
+                            (Chọn thư mục lưu trong cửa sổ bật lên)
+                        </div>
+                    </div>
                 </div>`;
-            showToast("Video đã sẵn sàng!");
+            showToast("Đã xong! Bạn có thể xem hoặc lưu video.");
         }
         return;
     }
-
     if(cmd === 'screenshot') {
         const path = await postControl({command:'screenshot'});
         const fullUrl = `http://${IP}:8080${path}?t=${new Date().getTime()}`;
@@ -82,7 +108,6 @@ window.sendCommand = async function(cmd){
         return;
     }
 
-    // Các lệnh khác
     let payload = {command: cmd};
     if(cmd === 'startApp' || cmd === 'stopProcess') {
         const val = (cmd==='startApp') ? document.getElementById('appName').value : document.getElementById('processName').value;
