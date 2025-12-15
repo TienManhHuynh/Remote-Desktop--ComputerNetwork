@@ -1,10 +1,15 @@
 ﻿#pragma once
+
+// --- BẮT BUỘC: Phải có winsock2.h để hiểu kiểu SOCKET ---
 #include <winsock2.h>
+#include <windows.h>
 #include <string>
-#include <atomic>
-//Stop Webcam
-void stopWecam();
-// Bật record trong n giây
-void StartRecord(int seconds);
-// Hàm Livestream trực tiếp (MJPEG over HTTP)
+
+// Khai báo hàm quay video (trả về đường dẫn file)
+std::string RecordWebcam(int seconds);
+
+// Khai báo hàm Livestream (nhận tham số là SOCKET)
 void StreamWebcam(SOCKET clientSocket);
+
+// Khai báo hàm dừng camera
+void StopWebcam();
