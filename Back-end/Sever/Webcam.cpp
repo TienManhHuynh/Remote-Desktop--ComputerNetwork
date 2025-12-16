@@ -10,7 +10,6 @@
 #include <atomic>
 #include <mutex>
 
-// THƯ VIỆN OPENCV
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -21,7 +20,6 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-// BIẾN TOÀN CỤC
 static std::atomic<bool> g_isStreaming(false);
 static cv::Mat g_currentFrame;
 static std::mutex g_frameMutex;
@@ -36,9 +34,6 @@ string GetCurrentTimeStr() {
     return ss.str();
 }
 
-// =============================================================
-// HÀM RECORD WEBCAM (PHIÊN BẢN FIX LỖI SIZE + CODEC)
-// =============================================================
 string RecordWebcam(int seconds) {
     if (seconds <= 0) seconds = 5;
 
@@ -46,16 +41,12 @@ string RecordWebcam(int seconds) {
     if (!fs::exists("captures")) fs::create_directory("captures");
     string fileName = "captures/video_" + GetCurrentTimeStr() + ".avi";
 
-    // 2. LẤY MẪU KHUNG HÌNH TRƯỚC (QUAN TRỌNG ĐỂ FIX LỖI CRASH)
-    // Ta phải biết chính xác Camera đang chạy độ phân giải nào
     cv::Mat sampleFrame;
     cv::VideoCapture tempCap;
     bool usingTempCap = false;
-
-    // Nếu đang Stream, lấy mẫu từ luồng Stream
     if (g_isStreaming) {
         int retries = 0;
-        while (retries < 20) { // Thử 20 lần (1 giây)
+        while (retries < 20) { 
             {
                 lock_guard<mutex> lock(g_frameMutex);
                 if (!g_currentFrame.empty()) {
@@ -67,7 +58,6 @@ string RecordWebcam(int seconds) {
             retries++;
         }
     }
-    // Nếu không Stream, tự mở Camera lấy mẫu
     else {
         tempCap.open(0, cv::CAP_DSHOW);
         if (tempCap.isOpened()) {
@@ -78,18 +68,16 @@ string RecordWebcam(int seconds) {
 
     if (sampleFrame.empty()) return "Loi: Khong the lay mau Camera de khoi tao Video.";
 
-    // 3. Khởi tạo VideoWriter với ĐÚNG KÍCH THƯỚC của Camera
     cv::VideoWriter writer;
-    int fourcc = cv::VideoWriter::fourcc('M', 'J', 'P', 'G'); // Codec AVI an toàn nhất
+    int fourcc = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
     double fps = 20.0;
-    cv::Size frameSize = sampleFrame.size(); // <--- FIX LỖI Ở ĐÂY (Không dùng 640x480 cứng nữa)
+    cv::Size frameSize = sampleFrame.size(); //
 
     cout << "[INFO] Camera Size: " << frameSize.width << "x" << frameSize.height << endl;
 
     // Thử mở bằng FFMPEG trước
     writer.open(fileName, cv::CAP_FFMPEG, fourcc, fps, frameSize);
 
-    // Nếu lỗi, thử fallback về mặc định
     if (!writer.isOpened()) {
         cout << "[WARN] FFMPEG failed, trying default..." << endl;
         writer.open(fileName, fourcc, fps, frameSize);
@@ -102,7 +90,6 @@ string RecordWebcam(int seconds) {
 
     cout << "[RECORD] Dang ghi file: " << fileName << endl;
 
-    // 4. Bắt đầu vòng lặp ghi
     auto startTime = chrono::steady_clock::now();
     while (chrono::steady_clock::now() - startTime <= chrono::seconds(seconds)) {
         cv::Mat frame;
@@ -120,13 +107,11 @@ string RecordWebcam(int seconds) {
                 if (tempCap.read(frame)) hasFrame = true;
             }
             else {
-                // Trường hợp mất kết nối camera giữa chừng, thử mở lại
                 if (tempCap.open(0, cv::CAP_DSHOW)) tempCap.read(frame);
             }
         }
 
         if (hasFrame && !frame.empty()) {
-            // Resize về đúng kích thước ban đầu (để tránh lỗi nếu camera đổi độ phân giải)
             if (frame.size() != frameSize) {
                 cv::resize(frame, frame, frameSize);
             }
@@ -142,7 +127,6 @@ string RecordWebcam(int seconds) {
     return fileName;
 }
 
-// HÀM STREAM GIỮ NGUYÊN
 void StreamWebcam(SOCKET clientSocket) {
     cv::VideoCapture cap(0, cv::CAP_DSHOW);
     if (!cap.isOpened()) return;

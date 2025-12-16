@@ -24,7 +24,6 @@
 using namespace std;
 using namespace Gdiplus;
 
-// --- CÁC HÀM HỖ TRỢ GIỮ NGUYÊN ---
 string GetJsonValue(string body, string key) {
     string searchKey = "\"" + key + "\":";
     size_t pos = body.find(searchKey);
@@ -58,7 +57,6 @@ void SendFileResponse(SOCKET clientSocket, string filePath) {
     send(clientSocket, content.c_str(), (int)content.length(), 0);
 }
 
-// --- HÀM XỬ LÝ KHÁCH HÀNG (Sẽ chạy trong luồng riêng) ---
 void HandleClient(SOCKET clientSocket) {
     char buffer[8192] = { 0 };
     int bytesReceived = recv(clientSocket, buffer, 8192, 0);
@@ -74,18 +72,16 @@ void HandleClient(SOCKET clientSocket) {
         string cors = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
         send(clientSocket, cors.c_str(), (int)cors.length(), 0);
     }
-    // 2. Stream Camera (Vòng lặp vô tận nằm ở đây, nhưng giờ đã an toàn vì ở luồng riêng)
     else if (request.find("GET /camera") != string::npos) {
         cout << "[STREAM] Dang phat Webcam (Thread ID: " << this_thread::get_id() << ")..." << endl;
         StreamWebcam(clientSocket);
     }
-    // --- 3. Tải File (GET /screenshot.png, GET /captures/...) ---
+
     else if (request.find("GET /") == 0 && request.find("GET /api") == string::npos && request.find("GET /ping") == string::npos) {
         size_t start = 5;
         size_t end = request.find(" HTTP/");
         string urlPath = request.substr(start, end - start);
 
-        // [MỚI] Cắt bỏ tham số query (ví dụ: screenshot.png?t=175849 -> chỉ lấy screenshot.png)
         size_t questionMark = urlPath.find("?");
         if (questionMark != string::npos) {
             urlPath = urlPath.substr(0, questionMark);
@@ -93,14 +89,11 @@ void HandleClient(SOCKET clientSocket) {
 
         string fileName = urlPath;
 
-        // Bảo mật: Chặn truy cập ngược thư mục cha
         if (fileName.find("..") == string::npos) {
-            // In ra console để debug xem nó đang tìm file gì
             cout << "[FILE] Client yeu cau file: " << fileName << endl;
             SendFileResponse(clientSocket, fileName);
         }
     }
-    // 4. Lệnh điều khiển
     else if (request.find("POST /control") != string::npos) {
         size_t bodyPos = request.find("\r\n\r\n");
         string jsonBody = (bodyPos != string::npos) ? request.substr(bodyPos + 4) : "";
@@ -126,7 +119,6 @@ void HandleClient(SOCKET clientSocket) {
         else if (cmd == "restart") { system("C:\\Windows\\System32\\shutdown.exe /r /t 5"); result = "Restart..."; }
 
         else if (cmd == "screenshot") {
-            // Giờ gọi hàm này an toàn vì GDI+ đã init ở main
             string file = CaptureScreenshot();
             result = (file != "") ? "/" + file : "Loi chup anh";
         }
@@ -146,11 +138,8 @@ void HandleClient(SOCKET clientSocket) {
 }
 
 int main() {
-    // 1. Khởi tạo Winsock
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) return 1;
-
-    // 2. KHỞI TẠO GDI+ (MỘT LẦN DUY NHẤT TẠI ĐÂY - QUAN TRỌNG ĐỂ FIX LỖI SCREENSHOT)
     GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
@@ -168,18 +157,14 @@ int main() {
 
     cout << "=== SERVER READY (MULTI-THREADED MODE) ===" << endl;
 
-    // Vòng lặp chính: Chỉ làm nhiệm vụ đón khách
     while (true) {
         SOCKET clientSocket = accept(serverSocket, NULL, NULL);
         if (clientSocket == INVALID_SOCKET) continue;
 
-        // TẠO LUỒNG MỚI ĐỂ XỬ LÝ KHÁCH (FIX LỖI TREO WEBCAM)
-        // detach() giúp luồng chạy độc lập, main loop quay lại đón khách ngay
         thread t(HandleClient, clientSocket);
         t.detach();
     }
 
-    // Dọn dẹp (Thực tế server chạy mãi nên ít khi tới đây)
     GdiplusShutdown(gdiplusToken);
     WSACleanup();
     return 0;

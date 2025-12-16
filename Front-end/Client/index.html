@@ -429,20 +429,13 @@
 
     <script src="script.js"></script>
     <script>
-        // Logic chuyển Tab mới
         function switchTab(tabId, btn) {
-            // 1. Ẩn tất cả các tab
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            // 2. Bỏ active tất cả nút
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            
-            // 3. Hiện tab được chọn
             document.getElementById(tabId).classList.add('active');
-            // 4. Active nút được bấm
             btn.classList.add('active');
         }
 
-        // Logic UI cho nút Connect (Thêm vào để UI đẹp hơn)
         document.getElementById('btnConnect').addEventListener('click', function() {
             const ip = document.getElementById('ipInput').value;
             const status = document.getElementById('connectStatus');

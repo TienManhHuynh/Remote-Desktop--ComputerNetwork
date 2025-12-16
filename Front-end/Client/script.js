@@ -12,8 +12,7 @@ function showToast(text, type = "success"){
 async function postControl(payload){
     if(!IP) throw new Error("not-connected");
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 15000); // 15s timeout cho video
-
+    const id = setTimeout(() => controller.abort(), 15000); //
     try {
         const res = await fetch(`http://${IP}:8080/control`, {
             method: "POST",
@@ -31,7 +30,7 @@ async function postControl(payload){
 
 document.getElementById('btnConnect').addEventListener('click', async ()=>{
     const ip = document.getElementById('ipInput').value.trim();
-    if(!ip) { showToast("Nhập IP đi bạn!", "error"); return; }
+    if(!ip) { showToast("Nhập IP ", "error"); return; }
     try {
         const res = await fetch(`http://${ip}:8080/ping`);
         if(res.ok) {
@@ -58,23 +57,19 @@ window.sendCommand = async function(cmd){
     
     if(cmd === 'recordVideo') {
         const sec = document.getElementById('recSeconds').value;
-        showToast(`🎥 Đang quay ${sec}s (Module riêng)...`, "warning");
-        
-        // 1. Gửi lệnh
+        showToast(`🎥 Đang quay ${sec}s ()...`, "warning");
+
         const path = await postControl({command:'recordVideo', seconds: sec});
         
         if(path.includes("Loi") || path.includes("Error")) {
             showToast(path, "error");
             document.getElementById('recordResult').innerHTML = `<div style="color:red">${path}</div>`;
         } else {
-            // 2. Tạo URL (Thêm timestamp để không cache video cũ)
             const timestamp = new Date().getTime();
             const fullUrl = `http://${IP}:8080${path}?t=${timestamp}`;
             
-            // 3. Tạo tên file khi tải về
             const downloadName = `Evidence_Video_${timestamp}.mp4`;
 
-            // 4. HIỆN VIDEO PLAYER & NÚT SAVE AS
             document.getElementById('recordResult').innerHTML = `
                 <div style="background:#1e293b; padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #475569;">
                     <div style="color:#4ade80; margin-bottom:10px; font-weight:bold;">
@@ -97,7 +92,7 @@ window.sendCommand = async function(cmd){
                         </div>
                     </div>
                 </div>`;
-            showToast("Đã xong! Bạn có thể xem hoặc lưu video.");
+            showToast("Đã xong!");
         }
         return;
     }

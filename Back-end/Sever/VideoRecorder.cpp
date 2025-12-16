@@ -43,9 +43,7 @@ std::string RecordVideo(int seconds) {
     cv::Mat frame;
     int frameCount = 0;
 
-    // 3. VÒNG LẶP CHỤP (Tối ưu tốc độ)
     while (true) {
-        // Kiểm tra thời gian
         auto now = chrono::steady_clock::now();
         double elapsed = chrono::duration_cast<chrono::milliseconds>(now - startTime).count() / 1000.0;
         if (elapsed >= seconds) break;
@@ -56,7 +54,6 @@ std::string RecordVideo(int seconds) {
             cv::imwrite(ss.str(), frame);
             frameCount++;
         }
-        // Giảm sleep xuống cực thấp để chụp được nhiều nhất có thể
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
@@ -64,22 +61,17 @@ std::string RecordVideo(int seconds) {
 
     if (frameCount == 0) return "Loi: Khong chup duoc frame nao.";
 
-    // 4. TÍNH TOÁN FPS THỰC TẾ (QUAN TRỌNG)
     auto endTime = chrono::steady_clock::now();
     double totalTime = chrono::duration_cast<chrono::milliseconds>(endTime - startTime).count() / 1000.0;
 
-    // FPS = Tổng số ảnh / Tổng thời gian
     double realFPS = (double)frameCount / totalTime;
 
     cout << "[RECORDER] Tong so Frame: " << frameCount << endl;
     cout << "[RECORDER] Thoi gian thuc: " << totalTime << "s" << endl;
     cout << "[RECORDER] FPS Tinh toan: " << realFPS << " (Video se chay dung toc do nay)" << endl;
 
-    // 5. GỌI FFMPEG VỚI FPS ĐỘNG
     string outputVideo = "captures/rec_" + GetTimeStrForFile() + ".mp4";
 
-    // Lưu ý: to_string(realFPS) giúp video chạy đúng tốc độ thực tế
-    // Dùng chuỗi lệnh stringstream để format lệnh chính xác
     stringstream cmdSS;
     cmdSS << "ffmpeg.exe -framerate " << realFPS << " -i \"temp_frames/img_%04d.jpg\" -c:v libx264 -pix_fmt yuv420p -y \"" << outputVideo << "\" > NUL 2>&1";
 

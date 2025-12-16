@@ -8,7 +8,6 @@ using namespace std;
 
 string globalAppList = "";
 
-// Hàm callback (xử lý từng cửa sổ tìm được)
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
     if (IsWindowVisible(hwnd)) {
         int length = GetWindowTextLengthA(hwnd); 
