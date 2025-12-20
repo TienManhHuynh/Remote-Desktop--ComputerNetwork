@@ -21,7 +21,7 @@ Web Application cho phép điều khiển và giám sát máy tính từ xa thô
 ---
 
 ## 2. Hướng dẫn Cài đặt & Chạy Demo. 
-Nhóm đã tạo sẵn phiên bản **Relase** ở thanh giao diện bên phải của repo , người dùng **không cần cài Visual Studio và các thư viện đi kèm**, chỉ cần tải về và chạy thử demo.
+Nhóm đã tạo sẵn phiên bản **Relase** ở thanh giao diện bên phải của repo , người dùng **không cần cài Visual Studio và các thư viện đi kèm**, chỉ cần tải về và chạy thử demo. Hai máy chạy thử phải kết nối vào chung một mạng để app hoạt động được.
 
 ### Bước 1: Tải và Giải nén.
 1. Vào mục **Releases** bên phải Github, tải file `.zip` mới nhất.
